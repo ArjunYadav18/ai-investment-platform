@@ -1,0 +1,7 @@
+pandas
+numpy
+yfinance
+openpyxl
+transformers
+torch
+newsapi-python

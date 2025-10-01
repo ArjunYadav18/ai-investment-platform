@@ -6,7 +6,6 @@ import numpy as np
 from datetime import datetime, timedelta
 import os
 
-# --- Configuration ---
 TICKERS = ['AAPL', 'MSFT', 'JPM', 'PG', 'JNJ', 'XOM']
 YEARS_OF_DATA = 5
 
@@ -20,7 +19,7 @@ def fetch_stock_data(tickers, years):
 
     try:
         data_df = yf.download(tickers, start=start_date, end=end_date)
-        adj_close_df = data_df['Adj Close']
+        adj_close_df = data_df['Close']
         
         if adj_close_df.empty:
             print("Error: No data fetched.")

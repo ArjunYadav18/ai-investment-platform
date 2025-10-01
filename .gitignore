@@ -4,6 +4,3 @@ venv/
 # Python cache files
 __pycache__/
 *.pyc
-
-# Generated data files
-data/*.csv
