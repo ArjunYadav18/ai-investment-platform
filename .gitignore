@@ -1,6 +1,24 @@
-# Virtual Environment
-venv/
+Node / Frontend Dependencies
+node_modules
+dist
+dist-ssr
+*.local
 
-# Python cache files
-__pycache__/
+Python / Backend Dependencies & Caches
+venv
+pycache/
 *.pyc
+
+IDE & OS Files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+.ntvs
+*.njsproj
+*.sln
+*.sw?
+
+Sensitive Environment Variables
+.env
