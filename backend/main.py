@@ -5,37 +5,37 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Import financial libraries
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from scipy.optimize import minimize
 from datetime import datetime, timedelta
 
-# --- Application Setup ---
-
-# Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
 
-# Configure CORS to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # The default port for Vite React dev server
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure the Gemini API
-try:
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    print("Gemini API configured successfully.")
-except KeyError:
-    raise RuntimeError("GEMINI_API_KEY not found in .env file. Please create a .env file and add your API key.")
+GEMINI_API_KEY = "AIzaSyAmQXmx19a8Un-5FfgsAL8-M7oBoXkyYec"
+GEMINI_CONFIGURED = False
+gemini_key = os.environ.get("GEMINI_API_KEY")
+if gemini_key:
+    try:
+        genai.configure(api_key=gemini_key)
+        GEMINI_CONFIGURED = True
+        print("Gemini API configured successfully.")
+    except Exception as e:
+        # Non-fatal: allow app to start but log the error.
+        print(f"Failed to configure Gemini API: {e}")
+else:
+    print("Warning: GEMINI_API_KEY not set. Gemini API endpoints will return 503 until configured.")
 
-# --- Pydantic Models for Request Bodies ---
 
 class ChatRequest(BaseModel):
     ticker: str
@@ -47,10 +47,8 @@ class PitchRequest(BaseModel):
     portfolio_composition: list
 
 class OptimizeRequest(BaseModel):
-    tickers: list[str] = ['AAPL', 'MSFT', 'JPM', 'PG', 'JNJ', 'XOM'] # Default tickers from your project
+    tickers: list[str] = ['AAPL', 'MSFT', 'JPM', 'PG', 'JNJ', 'XOM']
     years: int = 5
-
-# --- Portfolio Optimization Logic (Evolved from your data science project) ---
 
 def get_portfolio_performance(weights, mean_returns, cov_matrix):
     """Calculates portfolio performance metrics."""
@@ -100,12 +98,19 @@ async def optimize_portfolio(request: OptimizeRequest):
     Takes a list of tickers and returns the optimal portfolio based on MPT.
     """
     try:
-        # 1. Fetch data (logic from your data_processing.py)
+
+        try:
+            import yfinance as yf
+        except ImportError:
+            raise HTTPException(status_code=500, detail=(
+                "Missing dependency 'yfinance'. Please install backend requirements: `pip install -r requirements.txt`"
+            ))
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=request.years * 365)
         
         data_df = yf.download(request.tickers, start=start_date, end=end_date)['Close']
-        if data_df.empty:
+        if getattr(data_df, 'empty', False):
             raise ValueError("No data fetched. Check ticker symbols.")
 
         # 2. Calculate inputs (logic from your data_processing.py)

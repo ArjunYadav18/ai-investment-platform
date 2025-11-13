@@ -1,24 +1,17 @@
-Node / Frontend Dependencies
-node_modules
-dist
-dist-ssr
-*.local
-
-Python / Backend Dependencies & Caches
-venv
-pycache/
+venv/
+.venv/
+__pycache__/
 *.pyc
 
-IDE & OS Files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-.ntvs
-*.njsproj
-*.sln
-*.sw?
+# Node / Frontend
+node_modules/
+dist/
+.local
 
-Sensitive Environment Variables
+# Sensitive Environment File
 .env
+
+# OS & IDE Files
+.DS_Store
+.idea/
+.vscode/

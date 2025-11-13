@@ -1,87 +1,87 @@
-# src/sentiment_analysis.py
-
+import os
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from newsapi import NewsApiClient
 import pandas as pd
-import os
+from dotenv import load_dotenv
 
-# --- Configuration ---
-NEWS_API_KEY = "cd6160d0fd88428396386bed3906f75e"
-TICKERS = ['AAPL', 'MSFT', 'JPM', 'PG', 'JNJ', 'XOM']
+load_dotenv()
 
-def initialize_sentiment_model():
+class SentimentAnalyzer:
     """
-    Initializes the FinBERT model and tokenizer from Hugging Face.
-    This will download the model the first time it's run.
+    A class to handle FinBERT sentiment analysis.
+    It loads the model once and provides a method to get scores.
     """
-    print("Initializing FinBERT model...")
-    tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
-    model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
-    print("Model initialized successfully.")
-    return model, tokenizer
+    def __init__(self):
+        """
+        Initializes the FinBERT model, tokenizer, and NewsAPI client.
+        """
+        print("Initializing FinBERT model (this may take a moment)...")
+        self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+        self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+        print("FinBERT Model initialized successfully.")
 
-def fetch_recent_news(api_key, ticker):
-    """
-    Fetches recent news headlines for a given stock ticker using NewsAPI.
-    """
-    print(f"Fetching news for {ticker}...")
-    try:
-        newsapi = NewsApiClient(api_key=api_key)
-        articles = newsapi.get_everything(q=ticker,
-                                          language='en',
-                                          sort_by='publishedAt',
-                                          page_size=20) # Fetch 20 most recent articles
-        
-        headlines = [article['title'] for article in articles['articles']]
-        print(f"Found {len(headlines)} headlines for {ticker}.")
-        return headlines
-    except Exception as e:
-        print(f"Error fetching news for {ticker}: {e}")
-        return []
-
-def analyze_sentiment(headlines, model, tokenizer):
-    """
-    Analyzes the sentiment of a list of headlines using the FinBERT model.
-    Returns a single sentiment score (positive - negative).
-    """
-    if not headlines:
-        return 0.0
-
-    total_positive = 0
-    total_negative = 0
-    
-    with torch.no_grad():
-        for headline in headlines:
-            inputs = tokenizer(headline, return_tensors="pt", truncation=True, padding=True)
-            outputs = model(**inputs)
-            scores = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        self.api_key = os.environ.get("NEWS_API_KEY")
+        if not self.api_key:
+            raise RuntimeError("NEWS_API_KEY not found in .env file.")
             
-            positive_score = scores[0][0].item()
-            negative_score = scores[0][1].item()
+        self.newsapi = NewsApiClient(api_key=self.api_key)
+
+    def _fetch_recent_news(self, ticker: str) -> list:
+        """
+        Fetches recent news headlines for a given stock ticker.
+        """
+        print(f"Fetching news for {ticker}...")
+        try:
+            articles = self.newsapi.get_everything(q=ticker,
+                                                  language='en',
+                                                  sort_by='publishedAt',
+                                                  page_size=20)
             
-            total_positive += positive_score
-            total_negative += negative_score
+            headlines = [article['title'] for article in articles.get('articles', [])]
+            print(f"Found {len(headlines)} headlines for {ticker}.")
+            return headlines
+        except Exception as e:
+            print(f"Error fetching news for {ticker}: {e}")
+            return []
 
-    num_headlines = len(headlines)
-    final_score = (total_positive - total_negative) / num_headlines
-    return final_score
+    def _analyze_sentiment(self, headlines: list) -> float:
+        """
+        Analyzes a list of headlines and returns a single aggregated score.
+        Score is (avg_positive - avg_negative).
+        """
+        if not headlines:
+            return 0.0
 
-if __name__ == "__main__":
-    finbert_model, finbert_tokenizer = initialize_sentiment_model()
-    
-    sentiment_scores = {}
-    for ticker in TICKERS:
-        news_headlines = fetch_recent_news(NEWS_API_KEY, ticker)
-        sentiment = analyze_sentiment(news_headlines, finbert_model, finbert_tokenizer)
-        sentiment_scores[ticker] = sentiment
-        print(f"--- {ticker} Sentiment Score: {sentiment:.4f} ---")
+        total_positive = 0
+        total_negative = 0
         
-    sentiment_df = pd.DataFrame.from_dict(sentiment_scores, orient='index', columns=['sentiment_score'])
-    
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    output_path = os.path.join(base_dir, 'data', 'sentiment_scores.csv')
-    sentiment_df.to_csv(output_path)
-    
-    print("\nSentiment analysis complete.")
-    print(f"Scores saved to {output_path}")
+        with torch.no_grad():
+            for headline in headlines:
+                inputs = self.tokenizer(headline, return_tensors="pt", truncation=True, padding=True, max_length=512)
+                outputs = self.model(**inputs)
+                scores = torch.nn.functional.softmax(outputs.logits, dim=-1)
+
+                positive_score = scores[0][0].item()
+                negative_score = scores[0][1].item()
+                
+                total_positive += positive_score
+                total_negative += negative_score
+
+        num_headlines = len(headlines)
+        final_score = (total_positive - total_negative) / num_headlines
+        return final_score
+
+    def get_sentiment_scores(self, tickers: list[str]) -> pd.Series:
+        """
+        Main public method.
+        Gets sentiment scores for a list of tickers and returns them as a pandas Series.
+        """
+        sentiment_scores = {}
+        for ticker in tickers:
+            headlines = self._fetch_recent_news(ticker)
+            sentiment = self._analyze_sentiment(headlines)
+            sentiment_scores[ticker] = sentiment
+            print(f"--- {ticker} Sentiment Score: {sentiment:.4f} ---")
+            
+        return pd.Series(sentiment_scores)
