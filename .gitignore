@@ -2,16 +2,43 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
 
 # Node / Frontend
 node_modules/
 dist/
 .local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Sensitive Environment File
+# Sensitive Environment Files
 .env
+.env.local
+.env.*.local
 
 # OS & IDE Files
 .DS_Store
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+*.sublime-workspace
+*.sublime-project
+
+# Python specific
+.pytest_cache/
+.coverage
+htmlcov/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints/

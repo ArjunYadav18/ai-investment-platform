@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+google-generativeai
+pandas
+numpy
+scipy
+yfinance
+openpyxl
+newsapi-python
+# Note: torch and transformers are optional for sentiment analysis and brief generation
+# Install separately if needed: pip install torch transformers sec-api

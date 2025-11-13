@@ -34,31 +34,53 @@ type LivePortfolioData = {
     kpis: { return: number; volatility: number; sharpe_ratio: number };
 };
 
+type BriefData = {
+    ticker: string;
+    summary: string;
+    status: string;
+};
+
 function App(): JSX.Element {
   const [activeView, setActiveView] = useState('portfolio');
   const [selectedStock, setSelectedStock] = useState('AAPL');
   const [isLoadingBrief, setIsLoadingBrief] = useState(false);
   const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
-    const [livePortfolioData, setLivePortfolioData] = useState<LivePortfolioData | null>(null);
+  const [livePortfolioData, setLivePortfolioData] = useState<LivePortfolioData | null>(null);
+  const [briefData, setBriefData] = useState<BriefData | null>(null);
   
-    // --- NEW: State for user-defined portfolio ---
+  // --- NEW: State for user-defined portfolio ---
   const [tickerInput, setTickerInput] = useState('AAPL, MSFT, JPM, PG, JNJ, XOM');
 
   // --- NEW: State for the Analyst Chat ---
-    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-    const [chatInput, setChatInput] = useState<string>('');
-    const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
-    const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState<string>('');
+  const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  const handleStockChange = (ticker: string) => {
-    setIsLoadingBrief(true);
+  // Fetch brief from API when stock changes
+  const handleStockChange = async (ticker: string) => {
     setSelectedStock(ticker);
     setChatMessages([]); // Clear chat history when stock changes
-    setTimeout(() => setIsLoadingBrief(false), 1000);
+    setIsLoadingBrief(true);
+    setBriefData(null);
+
+    try {
+      const response = await axios.get(`http://127.0.0.1:8000/api/generate-brief/${ticker}`);
+      setBriefData(response.data);
+    } catch (error) {
+      console.error(`Error fetching brief for ${ticker}:`, error);
+      setBriefData({
+        ticker: ticker,
+        summary: "Failed to load brief. Please ensure the backend server is running and has the necessary API keys configured.",
+        status: "error"
+      });
+    } finally {
+      setIsLoadingBrief(false);
+    }
   };
 
   const runOptimization = async () => {
@@ -90,7 +112,7 @@ function App(): JSX.Element {
   // --- NEW: Function to handle Analyst Chat submission ---
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isChatLoading) return;
+    if (!chatInput.trim() || isChatLoading || !briefData) return;
 
     const userMessage: ChatMessage = { sender: 'user', text: chatInput };
     setChatMessages(prev => [...prev, userMessage]);
@@ -101,23 +123,20 @@ function App(): JSX.Element {
         const response = await axios.post('http://127.0.0.1:8000/api/generate/chat-response', {
             ticker: selectedStock,
             prompt: chatInput,
-            brief_summary: currentBrief.summary
+            brief_summary: briefData.summary
         });
-    const botMessage: ChatMessage = { sender: 'bot', text: String(response.data.response) };
-    setChatMessages(prev => [...prev, botMessage]);
+        const botMessage: ChatMessage = { sender: 'bot', text: String(response.data.response) };
+        setChatMessages(prev => [...prev, botMessage]);
     } catch (error) {
         console.error("Error fetching chat response:", error);
-    const errorMessage: ChatMessage = { sender: 'bot', text: "Sorry, I couldn't get a response. Please try again." };
-    setChatMessages(prev => [...prev, errorMessage]);
+        const errorMessage: ChatMessage = { sender: 'bot', text: "Sorry, I couldn't get a response. Please try again." };
+        setChatMessages(prev => [...prev, errorMessage]);
     } finally {
         setIsChatLoading(false);
     }
   };
 
-  const currentBrief = briefsData[selectedStock as keyof typeof briefsData];
-
   // Helper functions
-  const getSentimentColor = (sentiment: string) => sentiment === 'Positive' ? 'text-green-600' : sentiment === 'Negative' ? 'text-red-600' : 'text-amber-600';
   const getRiskLevelColor = (level: string) => level === 'H' ? 'bg-red-500' : level === 'M' ? 'bg-amber-500' : 'bg-green-500';
 
   // Dynamic Chart Data
@@ -237,17 +256,24 @@ function App(): JSX.Element {
                         {Object.keys(briefsData).map(ticker => <option key={ticker} value={ticker}>{briefsData[ticker as keyof typeof briefsData].company}</option>)}
                     </select>
                 </div>
-                 {isLoadingBrief ? <div className="text-center p-20">Loading Brief...</div> : (
+                {isLoadingBrief ? (
+                  <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-gray-200">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium">Fetching investment brief from SEC API...</p>
+                  </div>
+                ) : briefData ? (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
                         <div className="p-6 border-b border-gray-200">
-                            <div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-gray-900">{currentBrief.company}</h3><span className="text-sm text-gray-500">{currentBrief.date}</span></div>
-                            <div className="flex items-center space-x-3"><span className="text-sm font-medium text-gray-700">Sentiment:</span><span className={`text-lg font-bold ${getSentimentColor(currentBrief.sentiment)}`}>{currentBrief.sentiment} ({currentBrief.sentimentScore})</span></div>
+                            <div className="mb-2"><h3 className="text-2xl font-bold text-gray-900">{selectedStock}</h3></div>
+                            <div className="text-sm text-gray-600 italic">AI-generated summary from latest 10-K filing</div>
                         </div>
                         <div className="p-6 space-y-6">
-                            <div><h4 className="text-lg font-semibold text-gray-900 mb-3">Executive Summary</h4><p className="text-gray-700 leading-relaxed">{currentBrief.summary}</p></div>
-                            <div><h4 className="text-lg font-semibold text-gray-900 mb-3">Key Risks Identified</h4><ul className="space-y-2">{currentBrief.risks.map((risk, index) => (<li key={index} className="flex items-start"><span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mt-2 mr-3 flex-shrink-0"></span><span className="text-gray-700">{risk}</span></li>))}</ul></div>
-                            <div><h4 className="text-lg font-semibold text-gray-900 mb-3">Management Outlook</h4><p className="text-gray-700 leading-relaxed">{currentBrief.outlook}</p></div>
+                            <div><h4 className="text-lg font-semibold text-gray-900 mb-3">Management Discussion & Analysis (MD&A)</h4><p className="text-gray-700 leading-relaxed">{briefData.summary}</p></div>
                         </div>
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <p className="text-gray-600">No brief available. Please check the backend is running.</p>
                     </div>
                 )}
             </div>
